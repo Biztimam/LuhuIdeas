@@ -25,14 +25,34 @@ export function IdeaForm() {
     setStatus('submitting');
     setError('');
     try {
-      const { error: dbError } = await supabase.from('idea_submissions').insert({
+      const payload = {
         name: form.name.trim(),
         email: form.email.trim(),
         title: form.title.trim(),
         category: form.category,
         description: form.description.trim(),
-      });
+      };
+      const { error: dbError } = await supabase
+        .from('idea_submissions')
+        .insert(payload);
       if (dbError) throw dbError;
+
+      // Fire email notification — best-effort; a failure here should not
+      // invalidate the successful DB save.
+      try {
+        const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/notify-idea`;
+        await fetch(fnUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify(payload),
+        });
+      } catch {
+        // notification failed silently — idea is still saved in the DB
+      }
+
       setStatus('success');
       setForm({
         name: '',
